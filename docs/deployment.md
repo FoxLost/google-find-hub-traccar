@@ -144,8 +144,9 @@ TCP `5228` ke host tersebut. Relay tidak membutuhkan inbound port.
 ## Menjalankan image Docker Hub
 
 Jalur ini memakai image `herlambang333/google-find-hub-traccar`; tag yang
-direkomendasikan adalah `latest` dan `1.0.1`. Image saat ini hanya mendukung
-`linux/amd64`. Credential tetap harus diprovision di host dan distage sebelum
+direkomendasikan adalah `latest` dan `1.1.0`. Keduanya adalah image
+multi-platform untuk `linux/amd64` dan `linux/arm64`; tag legacy `1.0.1`
+tetap amd64-only. Credential harus diprovision di host dan distage sebelum
 container dibuat (langkah `install` di atas).
 
 Buat dedicated network jika belum ada, lalu hubungkan container Traccar:
@@ -185,6 +186,15 @@ docker run -d --name google-find-hub-traccar \
   -e TRACCAR_URL=http://host.docker.internal:5055 \
   -e DATA_DIRECTORY=/data -e CREDENTIALS_FILE=/data/credentials.json \
   herlambang333/google-find-hub-traccar:latest
+```
+
+Host ARM64 memilih varian yang benar secara otomatis. Untuk membuat pemilihannya
+eksplisit saat validasi:
+
+```bash
+docker pull --platform linux/arm64 herlambang333/google-find-hub-traccar:1.1.0
+docker run --rm --platform linux/arm64 \
+  herlambang333/google-find-hub-traccar:1.1.0 --version
 ```
 
 Setelah daemon berjalan detached, buka terminal container dengan:
@@ -258,6 +268,41 @@ Periksa konfigurasi Compose tanpa menampilkan environment lokal:
 docker compose -f compose.yaml config --quiet
 ```
 
+## Build dan rilis multi-platform
+
+Sekali saja pada host Linux, siapkan builder container dan emulator:
+
+```bash
+docker run --privileged --rm tonistiigi/binfmt --install arm64
+docker buildx create --name findhub-builder --driver docker-container --use
+docker buildx inspect --bootstrap
+```
+
+Script checked-in aman secara default: tanpa `--push` ia membangun kedua
+platform ke cache BuildKit dan tidak menghubungi registry. Versi berasal dari
+`findhub_relay/__init__.py`; versi yang diberikan selalu divalidasi terhadapnya.
+
+```bash
+./scripts/docker-image
+./scripts/docker-image --version 1.1.0 --push
+```
+
+Command kedua adalah publikasi eksplisit dan memerlukan login Docker Hub yang
+sudah tersedia. Ia mendorong `1.1.0` dan `latest` sebagai satu index. Verifikasi:
+
+```bash
+docker buildx imagetools inspect herlambang333/google-find-hub-traccar:1.1.0
+docker buildx imagetools inspect herlambang333/google-find-hub-traccar:latest
+```
+
+Workflow `Release container image` menjalankan QEMU, Buildx, build kedua
+platform, provenance, SBOM, dan push dengan secret repository
+`DOCKERHUB_USERNAME` serta `DOCKERHUB_TOKEN`. Rilis normal dipicu oleh tag
+semver yang cocok dengan versi package, misalnya `v1.1.0`. Dispatch manual
+memerlukan input `X.Y.Z`; opsi memperbarui `latest` hanya diterima dari branch
+`main`. Jangan membuat tag sebelum kedua secret disiapkan di
+**Settings → Secrets and variables → Actions**.
+
 ## Referensi CLI dan verifikasi
 
 Entrypoint image menerima command sebagai argumen:
@@ -281,6 +326,7 @@ dapat dijalankan di image runtime yang sengaja tidak memiliki dependency browser
 | `daemon` | Menjalankan siklus berkala dan listener FCM; membutuhkan credential valid, `TRACCAR_URL`, dan upstream. | Berjalan sampai dihentikan; `0` saat berhenti dengan signal, non-zero untuk error fatal. |
 | `healthcheck` | Membaca health state SQLite tanpa memulai listener. | `0` sehat, `1` tidak sehat, `2` untuk error konfigurasi/fatal. |
 | `--help` | Menampilkan pemakaian. | `0`; tanpa credential atau service aktif. |
+| `--version` | Menampilkan versi package/image. | `0`; tanpa credential atau service aktif. |
 
 Saat daemon berjalan, `exec` hanya dipakai untuk pemeriksaan operasional:
 

@@ -147,8 +147,8 @@ Hubungkan container Traccar ke network sebelum menjalankan relay. Untuk hardenin
 lengkap, Windows-native Traccar, lifecycle, dan one-off `devices`/`once`, gunakan
 [panduan deployment Docker Hub](docs/deployment.md#menjalankan-image-docker-hub).
 
-Tag yang direkomendasikan adalah `latest` dan `1.0.1`. Image saat ini
-ditujukan untuk `linux/amd64`; provisioning credential tetap dilakukan di host.
+Tag yang direkomendasikan adalah `latest` dan `1.1.0`; keduanya menyediakan
+`linux/amd64` dan `linux/arm64`. Tag lama `1.0.1` tetap legacy amd64-only.
 
 ## Menjalankan dengan Compose
 
@@ -169,6 +169,7 @@ Referensi CLI singkat:
 | `daemon` | Menjalankan siklus berkala dan listener FCM; membutuhkan credential valid, `TRACCAR_URL`, dan akses upstream. | Berjalan sampai dihentikan; `0` saat berhenti dengan signal, non-zero untuk error fatal. |
 | `healthcheck` | Membaca health state dari SQLite; tidak menjalankan listener baru. | `0` sehat, `1` tidak sehat, `2` untuk error konfigurasi/fatal. |
 | `--help` | Menampilkan pemakaian dan opsi. | `0`; tidak membutuhkan runtime atau credential. |
+| `--version` | Menampilkan versi package/image. | `0`; tidak membutuhkan runtime atau credential. |
 
 Di host checkout gunakan `./bin/findhub-relay <perintah>`; fallback module-nya
 adalah `python -m findhub_relay <perintah>`. Di image, executable terpasang di

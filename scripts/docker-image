@@ -1,0 +1,77 @@
+#!/bin/sh
+set -eu
+
+repository="${IMAGE_REPOSITORY:-herlambang333/google-find-hub-traccar}"
+platforms="linux/amd64,linux/arm64"
+push=false
+version=""
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/docker-image [--version X.Y.Z] [--push]
+
+Without --push, builds both runtime platforms into the BuildKit cache and never
+contacts a registry. Publishing requires both --push and an explicit --version.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --version)
+            [ "$#" -ge 2 ] || { echo "--version requires a value" >&2; exit 2; }
+            version=$2
+            shift 2
+            ;;
+        --push)
+            push=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+package_version=$(python3 -c 'from findhub_relay import __version__; print(__version__)')
+if [ -z "$version" ]; then
+    if [ "$push" = true ]; then
+        echo "--push requires an explicit --version X.Y.Z" >&2
+        exit 2
+    fi
+    version=$package_version
+fi
+
+case "$version" in
+    *[!0-9.]*|.*|*.*.*.*|*..*|*[!0-9])
+        echo "version must be a stable X.Y.Z semantic version" >&2
+        exit 2
+        ;;
+esac
+[ "$(printf '%s' "$version" | tr -cd '.' | wc -c)" -eq 2 ] || {
+    echo "version must be a stable X.Y.Z semantic version" >&2
+    exit 2
+}
+[ "$version" = "$package_version" ] || {
+    echo "version $version does not match package version $package_version" >&2
+    exit 2
+}
+
+set -- docker buildx build \
+    --platform "$platforms" \
+    --build-arg "VERSION=$version" \
+    --provenance=mode=max \
+    --sbom=true \
+    --tag "$repository:$version" \
+    --tag "$repository:latest"
+
+if [ "$push" = true ]; then
+    set -- "$@" --push
+fi
+
+"$@" .

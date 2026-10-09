@@ -3,6 +3,7 @@
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 import unittest
@@ -39,6 +40,23 @@ class LauncherBehaviorTests(unittest.TestCase):
             ["-m", "findhub_relay", "once", "argument with spaces", "--flag=value"],
         )
         self.assertEqual(result.stderr, "forwarded stderr\n")
+
+    def test_reports_package_version_without_runtime_credentials(self):
+        result = subprocess.run(
+            [LAUNCHER, "--version"],
+            cwd=REPOSITORY_ROOT,
+            env={
+                **os.environ,
+                "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}",
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "python -m findhub_relay 1.1.0\n")
+        self.assertEqual(result.stderr, "")
 
     def test_exec_preserves_python_signal_status(self):
         with tempfile.TemporaryDirectory() as directory:

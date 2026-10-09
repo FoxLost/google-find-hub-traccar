@@ -11,8 +11,9 @@ berubah atau berhenti tanpa pemberitahuan.
 ## Image dan prasyarat
 
 - Image: `herlambang333/google-find-hub-traccar`
-- Tag yang direkomendasikan: `latest` dan `1.0.1`
-- Arsitektur yang didukung: `linux/amd64` saja.
+- Tag yang direkomendasikan: `latest` dan `1.1.0`.
+- Arsitektur yang didukung: `linux/amd64` dan `linux/arm64`.
+- Tag legacy `1.0.1` tetap amd64-only.
 - Provision credential di host terlebih dahulu; image runtime tidak menyediakan
   browser atau alur provisioning.
 - Traccar harus menerima protokol OsmAnd pada TCP `5055`.
@@ -49,6 +50,13 @@ docker run -d --name google-find-hub-traccar \
   -e TRACCAR_URL=http://traccar:5055 \
   -e DATA_DIRECTORY=/data -e CREDENTIALS_FILE=/data/credentials.json \
   herlambang333/google-find-hub-traccar:latest
+```
+
+Pada host ARM64, Docker memilih varian native secara otomatis. Validasi versi:
+
+```bash
+docker run --rm --platform linux/arm64 \
+  herlambang333/google-find-hub-traccar:1.1.0 --version
 ```
 
 Untuk Traccar native di Windows, pastikan Traccar listen pada alamat non-loopback

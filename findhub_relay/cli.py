@@ -15,12 +15,16 @@ import sqlite3
 import signal
 import sys
 
+from . import __version__
 from .config import Config, ConfigError
 from .database import Database
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m findhub_relay")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     parser.add_argument(
         "command", choices=("provision", "devices", "once", "daemon", "healthcheck")
     )
