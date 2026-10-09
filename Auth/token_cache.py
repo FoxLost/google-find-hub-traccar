@@ -35,22 +35,32 @@ def get_cached_value(name: str):
     return None
 
 
-def set_cached_value(name: str, value: str):
+def set_cached_value(name: str, value):
     secrets_file = _get_secrets_file()
 
     if os.path.exists(secrets_file):
-        with open(secrets_file, 'r') as file:
+        with open(secrets_file, 'r', encoding='utf-8') as file:
             try:
                 data = json.load(file)
-            except json.JSONDecodeError:
-                raise Exception("Could not read secrets file. Aborting.")
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Could not read credentials file. Aborting.") from exc
     else:
         data = {}
     data[name] = value
-    with open(secrets_file, 'w') as file:
+    parent = os.path.dirname(secrets_file)
+    os.makedirs(parent, mode=0o700, exist_ok=True)
+    temporary = secrets_file + ".tmp"
+    with open(temporary, 'w', encoding='utf-8') as file:
         json.dump(data, file)
+        file.flush()
+        os.fsync(file.fileno())
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, secrets_file)
 
 
 def _get_secrets_file():
+    configured = os.environ.get("CREDENTIALS_FILE")
+    if configured:
+        return os.path.abspath(os.path.expanduser(configured))
     script_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(script_dir, SECRETS_FILE)

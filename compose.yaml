@@ -1,0 +1,44 @@
+name: google-find-hub-traccar
+
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: google-find-hub-traccar:local
+    restart: unless-stopped
+    stop_grace_period: 45s
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ${RELAY_DATA_DIR:-./relay-data}:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: ${TZ:-UTC}
+      TRACCAR_URL: ${TRACCAR_URL:-http://traccar:5055}
+      DATA_DIRECTORY: /data
+      CREDENTIALS_FILE: /data/credentials.json
+    networks:
+      - tracking
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# The network is external so a separately deployed Traccar service can be
+# reached by its Docker DNS name, "traccar". Create it before `compose up`.
+networks:
+  tracking:
+    name: ${TRACKING_NETWORK:-tracking}
+    external: true

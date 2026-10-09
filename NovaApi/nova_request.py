@@ -5,11 +5,14 @@
 
 import binascii
 import requests
-from bs4 import BeautifulSoup
 
-from Auth.aas_token_retrieval import get_aas_token
 from Auth.adm_token_retrieval import get_adm_token
 from Auth.username_provider import get_username
+
+class NovaRequestError(RuntimeError):
+    """Safe failure from the Google Nova endpoint."""
+
+
 
 
 def nova_request(api_scope, hex_payload):
@@ -21,19 +24,17 @@ def nova_request(api_scope, hex_payload):
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "Authorization": "Bearer " + android_device_manager_oauth_token,
         "Accept-Language": "en-US",
-        "User-Agent": "fmd/20006320; gzip"
+        "User-Agent": "fmd/20006320; gzip",
+        "X-Android-Package": "com.google.android.apps.adm",
+        "X-Android-Cert": "38918A453D07199354F8B19AF05EC6562CED5788",
     }
 
     payload = binascii.unhexlify(hex_payload)
 
-    response = requests.post(url, headers=headers, data=payload)
-
-    if response.status_code == 200:
-        return response.content.hex()
-    else:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        print("[NovaRequest] Error: ", soup.get_text())
-
-
-if __name__ == '__main__':
-    print(get_aas_token())
+    try:
+        response = requests.post(url, headers=headers, data=payload, timeout=30)
+    except requests.RequestException as exc:
+        raise NovaRequestError(f"Nova request failed: {type(exc).__name__}") from exc
+    if response.status_code != 200:
+        raise NovaRequestError(f"Nova request returned HTTP {response.status_code}")
+    return response.content.hex()

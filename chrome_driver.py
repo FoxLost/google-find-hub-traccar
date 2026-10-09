@@ -3,10 +3,12 @@
 #  Copyright © 2024 Leon Böttger. All rights reserved.
 #
 
-import undetected_chromedriver as uc
+import ntpath
 import os
-import shutil
 import platform
+import shutil
+
+import undetected_chromedriver as uc
 
 def find_chrome():
     """Find Chrome executable using known paths and system commands."""
@@ -19,11 +21,14 @@ def find_chrome():
         "/usr/local/bin/google-chrome",
         "/opt/google/chrome/chrome",
         "/snap/bin/chromium",
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     ]
 
-    # Check predefined paths
-    for path in possiblePaths:
+    # Expand both POSIX home/env syntax and Windows ``%VAR%`` syntax so the
+    # same candidates remain testable when this module is imported from WSL.
+    for candidate in possiblePaths:
+        path = os.path.expanduser(os.path.expandvars(ntpath.expandvars(candidate)))
         if os.path.exists(path):
             return path
 
@@ -46,7 +51,8 @@ def get_options():
     chrome_options.add_argument("--start-maximized")
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
+    if os.environ.get("CHROME_NO_SANDBOX") == "1":
+        chrome_options.add_argument("--no-sandbox")
 
     return chrome_options
 
@@ -80,7 +86,3 @@ def create_driver():
             "If you know that Chrome is installed, update Chrome to the latest version. If the script is still not working, "
             "set the path to your Chrome executable manually inside the script."
         )
-
-
-if __name__ == '__main__':
-    create_driver()

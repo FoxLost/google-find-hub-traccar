@@ -14,6 +14,3 @@ def get_username():
         return username
 
     return ""
-
-if __name__ == '__main__':
-    get_username()

@@ -35,7 +35,7 @@ import secrets
 import time
 import uuid
 from base64 import b64encode, urlsafe_b64encode
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from aiohttp import ClientSession, ClientTimeout
@@ -76,12 +76,10 @@ class FcmRegisterConfig:
     chrome_id: str = "org.chromium.linux"
     chrome_version: str = "94.0.4606.51"
     vapid_key: str | None = GCM_SERVER_KEY_B64
-    persistend_ids: list[str] | None = None
+    persistend_ids: list[str] = field(default_factory=list)
     heartbeat_interval_ms: int = 5 * 60 * 1000  # 5 mins
-
-    def __postinit__(self) -> None:
-        if self.persistend_ids is None:
-            self.persistend_ids = []
+    android_package: str | None = None
+    android_cert_sha1: str | None = None
 
 
 class FcmRegister:
@@ -305,9 +303,11 @@ class FcmRegister:
         hb_header = b64encode(
             json.dumps({"heartbeats": [], "version": 2}).encode()
         ).decode()
+        android_headers = self._android_headers()
         headers = {
             "x-firebase-client": hb_header,
             "x-goog-api-key": self.config.api_key,
+            **android_headers,
         }
         payload = {
             "appId": self.config.app_id,
@@ -348,10 +348,12 @@ class FcmRegister:
             raise RuntimeError("Credentials must be set to refresh install token")
         fcm_refresh_token = self.credentials["fcm"]["installation"]["refresh_token"]
 
+        android_headers = self._android_headers()
         headers = {
             "Authorization": f"{AUTH_VERSION} {fcm_refresh_token}",
             "x-firebase-client": hb_header,
             "x-goog-api-key": self.config.api_key,
+            **android_headers,
         }
         payload = {
             "installation": {
@@ -413,9 +415,11 @@ class FcmRegister:
         keys: dict,
         retries: int = 2,
     ) -> dict[str, Any] | None:
+        android_headers = self._android_headers()
         headers = {
             "x-goog-api-key": self.config.api_key,
             "x-goog-firebase-installations-auth": installation["token"],
+            **android_headers,
         }
         # If vapid_key is the default do not send it here or it will error
         vapid_key = (
@@ -465,6 +469,14 @@ class FcmRegister:
                 )
                 await asyncio.sleep(1)
         return None
+
+    def _android_headers(self) -> dict[str, str]:
+        if not self.config.android_package or not self.config.android_cert_sha1:
+            return {}
+        return {
+            "X-Android-Package": self.config.android_package,
+            "X-Android-Cert": self.config.android_cert_sha1,
+        }
 
     async def checkin_or_register(self) -> dict[str, Any]:
         """Check in if you have credentials otherwise register as a new client.

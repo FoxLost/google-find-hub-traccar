@@ -43,6 +43,3 @@ def request_oauth_account_token_flow():
     finally:
         # Close the browser
         driver.quit()
-
-if __name__ == '__main__':
-    request_oauth_account_token_flow()

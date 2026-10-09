@@ -5,11 +5,14 @@
 
 import httpx
 import h2 # required for httpx to support HTTP/2
-from bs4 import BeautifulSoup
 
 from Auth.spot_token_retrieval import get_spot_token
 from Auth.username_provider import get_username
 from SpotApi.grpc_parser import GrpcParser
+
+
+class SpotRequestError(RuntimeError):
+    """Safe failure from the Google Spot endpoint."""
 
 
 def spot_request(api_scope: str, payload: bytes) -> bytes:
@@ -30,11 +33,8 @@ def spot_request(api_scope: str, payload: bytes) -> bytes:
     with httpx.Client(http2=True, timeout=30.0) as client:
         response = client.post(url, headers=headers, content=payload)
 
-        if response.status_code == 200:
-            result = GrpcParser.extract_grpc_payload(response.content)
-            return result
-        else:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            print("[NovaRequest] Error: ", soup.get_text())
-
-    return b''
+        if response.status_code != 200:
+            raise SpotRequestError(
+                f"Spot request returned HTTP {response.status_code}"
+            )
+        return GrpcParser.extract_grpc_payload(response.content)

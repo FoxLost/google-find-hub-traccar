@@ -18,7 +18,3 @@ def get_eid_info():
     eid_info.ParseFromString(response_bytes)
 
     return eid_info
-
-
-if __name__ == '__main__':
-    print(get_eid_info().encryptedOwnerKeyAndMetadata)

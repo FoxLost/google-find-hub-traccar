@@ -5,23 +5,9 @@
 from Cryptodome.Cipher import AES
 from ecdsa import SECP160r1
 
-from example_data_provider import get_example_data
 
 # Constants
 K = 10
-ROTATION_PERIOD = 1024  # 2^K seconds
-
-def generate_eid(identity_key: bytes, timestamp: int) -> bytes:
-    # Calculate r
-    r = calculate_r(identity_key, timestamp)
-
-    # Compute R = r * G
-    curve = SECP160r1
-    R = r * curve.generator
-
-    # Return the x coordinate of R as the EID
-    return R.x().to_bytes(20, 'big')
-
 
 def calculate_r(identity_key: bytes, timestamp: int):
     # ts_bytes is the timestamp in bytes, but the least K significant bits are set to 0
@@ -61,14 +47,3 @@ def get_masked_timestamp(timestamp: int, K: int):
 
     # Convert back to a byte array with the same length as the original
     return timestamp.to_bytes(4, byteorder='big')
-
-
-if __name__ == '__main__':
-
-    sample_identity_key = get_example_data("sample_identity_key")
-
-    # Generate EIDs
-    for i in range(1000):
-        timestamp = i * ROTATION_PERIOD
-        eid = generate_eid(sample_identity_key, timestamp)
-        print(f"{timestamp}: {eid.hex()}")

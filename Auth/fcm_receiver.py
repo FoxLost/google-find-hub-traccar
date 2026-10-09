@@ -32,6 +32,8 @@ class FcmReceiver:
             api_key=api_key,
             messaging_sender_id=message_sender_id,
             bundle_id="com.google.android.apps.adm",
+            android_package="com.google.android.apps.adm",
+            android_cert_sha1="38918A453D07199354F8B19AF05EC6562CED5788",
         )
 
         self.credentials = get_cached_value('fcm_credentials')
@@ -55,10 +57,15 @@ class FcmReceiver:
 
 
     def get_android_id(self):
-
         if self.credentials is None:
-            return asyncio.get_event_loop().run_until_complete(self._register_for_fcm_and_listen())
-
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                asyncio.run(self._register_for_fcm())
+            else:
+                raise RuntimeError(
+                    "FCM provisioning must run outside an active event loop"
+                )
         return self.credentials['gcm']['android_id']
 
 
@@ -109,8 +116,3 @@ class FcmReceiver:
         await self.pc.start()
         self._listening = True
         print("[FCMReceiver] Listening for notifications. This can take a few seconds...")
-
-
-if __name__ == "__main__":
-    receiver = FcmReceiver()
-    print(receiver.get_android_id())

@@ -5,10 +5,10 @@
 from binascii import unhexlify
 
 from Auth.token_cache import get_cached_value_or_set
-from KeyBackup.shared_key_flow import request_shared_key_flow
 
 
 def _retrieve_shared_key():
+    from KeyBackup.shared_key_flow import request_shared_key_flow
     print("""[SharedKeyRetrieval] You need to log in again to access end-to-end encrypted keys to decrypt location reports.
 > This script will now open Google Chrome on your device. 
 > Make that you allow Python (or PyCharm) to control Chrome (macOS only).
@@ -24,7 +24,3 @@ def _retrieve_shared_key():
 
 def get_shared_key() -> bytes:
     return unhexlify(get_cached_value_or_set('shared_key', _retrieve_shared_key))
-
-
-if __name__ == '__main__':
-    print(get_shared_key())
