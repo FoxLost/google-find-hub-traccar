@@ -1,7 +1,6 @@
 FROM python:3.11.11-slim-bookworm
 ARG VERSION=dev
 
-
 LABEL org.opencontainers.image.title="Google Find Hub Traccar Relay" \
       org.opencontainers.image.description="Persistent Google Find Hub to Traccar OsmAnd relay" \
       org.opencontainers.image.version="${VERSION}" \

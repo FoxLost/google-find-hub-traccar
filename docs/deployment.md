@@ -279,8 +279,9 @@ docker buildx inspect --bootstrap
 ```
 
 Script checked-in aman secara default: tanpa `--push` ia membangun kedua
-platform ke cache BuildKit dan tidak menghubungi registry. Versi berasal dari
-`findhub_relay/__init__.py`; versi yang diberikan selalu divalidasi terhadapnya.
+platform ke cache BuildKit dan tidak pernah memublikasikan output ke registry.
+Versi berasal dari `findhub_relay/__init__.py`; versi yang diberikan selalu
+divalidasi terhadapnya.
 
 ```bash
 ./scripts/docker-image

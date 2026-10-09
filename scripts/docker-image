@@ -11,7 +11,7 @@ usage() {
 Usage: scripts/docker-image [--version X.Y.Z] [--push]
 
 Without --push, builds both runtime platforms into the BuildKit cache and never
-contacts a registry. Publishing requires both --push and an explicit --version.
+publishes registry output. Publishing requires --push and an explicit --version.
 EOF
 }
 
