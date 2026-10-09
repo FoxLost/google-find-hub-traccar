@@ -54,23 +54,37 @@ class RelayService:
         return [by_id[device_id] for device_id in self.config.device_ids]
 
     async def run_cycle(self, *, force_refresh: bool = False) -> dict:
+        cycle_started = time.monotonic()
         started = int(time.time())
-        self.database.set_health(cycle_started_at=started, last_error=None)
         errors: list[str] = []
-        queried = queued = 0
+        selected = queried = queued = sent = delivery_failures = 0
+        status = "failed"
+        LOGGER.info("Relay cycle started")
+        self.database.set_health(cycle_started_at=started, last_error=None)
         try:
             devices = await self.selected_devices(force_refresh=force_refresh)
+            selected = len(devices)
             for device in devices:  # Deliberately sequential: one outstanding UUID request.
                 device_id = device["device_id"]
                 try:
                     locations = await self.findhub.locate(device_id)
+                    LOGGER.info(
+                        "Find Hub query succeeded device_id=%s reports=%d",
+                        device_id,
+                        len(locations),
+                    )
                     queued += self.database.enqueue_positions(device_id, locations)
                     queried += 1
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    LOGGER.error("Location request failed for device %s: %s", device_id, exc)
-                    errors.append(f"{device_id}: {type(exc).__name__}: {exc}")
+                    error_type = type(exc).__name__
+                    LOGGER.error(
+                        "Find Hub query failed device_id=%s error_type=%s",
+                        device_id,
+                        error_type,
+                    )
+                    errors.append(f"{device_id}: {error_type}")
             sent, delivery_failures = await self.sender.flush()
             if delivery_failures:
                 errors.append(f"{delivery_failures} outbound deliveries failed")
@@ -88,20 +102,56 @@ class RelayService:
                 "errors": errors,
             }
         except asyncio.CancelledError:
+            status = "cancelled"
             self.database.set_health(
-                cycle_status="cancelled", cycle_finished_at=int(time.time())
+                cycle_status=status, cycle_finished_at=int(time.time())
             )
             raise
         except Exception as exc:
+            error_type = type(exc).__name__
             self.database.set_health(
                 cycle_status="failed",
                 cycle_finished_at=int(time.time()),
-                last_error=f"{type(exc).__name__}: {exc}",
+                last_error=error_type,
             )
+            LOGGER.error("Relay cycle failed error_type=%s", error_type)
             raise
+        finally:
+            pending_positions = -1
+            try:
+                pending_positions = self.database.pending_position_count()
+            except Exception as exc:
+                LOGGER.warning(
+                    "Relay cycle pending count failed error_type=%s",
+                    type(exc).__name__,
+                )
+            LOGGER.info(
+                "Relay cycle completed status=%s devices_selected=%d "
+                "devices_queried=%d positions_queued=%d positions_sent=%d "
+                "delivery_failures=%d pending_positions=%d duration_seconds=%.3f",
+                status,
+                selected,
+                queried,
+                queued,
+                sent,
+                delivery_failures,
+                pending_positions,
+                time.monotonic() - cycle_started,
+            )
 
     async def run_daemon(self, stop_event: asyncio.Event) -> None:
         self.database.set_health(daemon_status="running", started_at=int(time.time()))
+        if self.config.device_ids is None:
+            LOGGER.info(
+                "Relay daemon started poll_interval_seconds=%d device_filter=all",
+                self.config.poll_interval_seconds,
+            )
+        else:
+            LOGGER.info(
+                "Relay daemon started poll_interval_seconds=%d device_filter_count=%d",
+                self.config.poll_interval_seconds,
+                len(self.config.device_ids),
+            )
         try:
             first = True
             while not stop_event.is_set():
@@ -110,8 +160,15 @@ class RelayService:
                 except asyncio.CancelledError:
                     raise
                 except Exception:
-                    LOGGER.exception("Relay cycle failed; next cycle will retry")
+                    # run_cycle records and logs the safe error type before retrying.
+                    pass
                 first = False
+                if stop_event.is_set():
+                    break
+                LOGGER.info(
+                    "Relay daemon waiting next_cycle_seconds=%d",
+                    self.config.poll_interval_seconds,
+                )
                 try:
                     await asyncio.wait_for(
                         stop_event.wait(), timeout=self.config.poll_interval_seconds
@@ -120,3 +177,4 @@ class RelayService:
                     pass
         finally:
             self.database.set_health(daemon_status="stopped")
+            LOGGER.info("Relay daemon stopped gracefully")

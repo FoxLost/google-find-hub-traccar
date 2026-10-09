@@ -51,8 +51,10 @@ class OsmandSender:
                     )
                 except requests.RequestException as exc:
                     LOGGER.warning(
-                        "OsmAnd endpoint unavailable for device %s: %s",
+                        "OsmAnd delivery transport failure device_id=%s "
+                        "position_timestamp=%s error_type=%s",
                         position["device_id"],
+                        position["timestamp"],
                         type(exc).__name__,
                     )
                     failed += 1
@@ -60,12 +62,21 @@ class OsmandSender:
                 if 200 <= status_code < 300:
                     self.database.mark_sent(position["id"])
                     sent += 1
+                    LOGGER.info(
+                        "OsmAnd delivery accepted device_id=%s "
+                        "position_timestamp=%s http_status=%s",
+                        position["device_id"],
+                        position["timestamp"],
+                        status_code,
+                    )
                     continue
                 failed += 1
                 LOGGER.warning(
-                    "OsmAnd endpoint returned HTTP %s for device %s",
-                    status_code,
+                    "OsmAnd delivery HTTP failure device_id=%s "
+                    "position_timestamp=%s http_status=%s",
                     position["device_id"],
+                    position["timestamp"],
+                    status_code,
                 )
                 if status_code == 429 or status_code >= 500:
                     break

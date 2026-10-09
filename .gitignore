@@ -12,6 +12,15 @@ build/
 dist/
 *.egg-info/
 
+# Local logs, tool caches, and browser profiles
+*.log
+.cache/
+**/.cache/
+browser-profile/
+browser-profiles/
+chrome-profile/
+chrome-profiles/
+
 # Editors and operating systems
 .idea/
 .vscode/
@@ -33,6 +42,13 @@ provision-data/
 data/
 relay.db
 relay.db-*
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 
 # Legacy local sample input
 example_data.json

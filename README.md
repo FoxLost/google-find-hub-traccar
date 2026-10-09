@@ -121,7 +121,36 @@ TRACCAR_URL=http://host.docker.internal:5055
 
 Traccar native harus listen pada alamat non-loopback dan firewall harus mengizinkan TCP `5055`. Compose menyediakan mapping `host.docker.internal` ke host gateway.
 
-## Menjalankan relay
+## Menjalankan dari Docker Hub
+
+Image yang dipublikasikan adalah `herlambang333/google-find-hub-traccar`.
+Ikuti [panduan deployment Docker Hub](docs/deployment.md#menjalankan-image-docker-hub)
+untuk staging credential, network Traccar, dan command `docker run` yang sudah
+di-hardening. Jalur singkat setelah prasyarat siap:
+
+```bash
+docker pull herlambang333/google-find-hub-traccar:latest
+docker network create tracking
+docker run -d --name google-find-hub-traccar --restart unless-stopped \
+  -v "$PWD/relay-data:/data" --network tracking \
+  -e TRACCAR_URL=http://traccar:5055 \
+  herlambang333/google-find-hub-traccar:latest
+```
+
+Setelah daemon berjalan detached, buka terminal container dengan:
+
+```bash
+docker exec -it google-find-hub-traccar sh
+```
+
+Hubungkan container Traccar ke network sebelum menjalankan relay. Untuk hardening
+lengkap, Windows-native Traccar, lifecycle, dan one-off `devices`/`once`, gunakan
+[panduan deployment Docker Hub](docs/deployment.md#menjalankan-image-docker-hub).
+
+Tag yang direkomendasikan adalah `latest` dan `1.0.1`. Image saat ini
+ditujukan untuk `linux/amd64`; provisioning credential tetap dilakukan di host.
+
+## Menjalankan dengan Compose
 
 Bangun dan jalankan daemon:
 
@@ -180,6 +209,10 @@ Compose `up -d` memakai `daemon` sebagai command default dan restart policy `unl
 docker compose -f compose.yaml ps
 docker compose -f compose.yaml logs --tail=100 relay
 ```
+
+Signal normal utama adalah `Relay cycle completed status=ok`. Arti field log,
+health, retry antrean, dan batas privasinya dijelaskan di
+[Log, health, dan privasi](docs/deployment.md#log-health-dan-privasi).
 
 ## Konfigurasi environment
 

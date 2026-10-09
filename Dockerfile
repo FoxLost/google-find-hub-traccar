@@ -2,7 +2,9 @@ FROM python:3.11.11-slim-bookworm
 
 LABEL org.opencontainers.image.title="Google Find Hub Traccar Relay" \
       org.opencontainers.image.description="Persistent Google Find Hub to Traccar OsmAnd relay" \
+      org.opencontainers.image.version="1.0.1" \
       org.opencontainers.image.source="https://github.com/FoxLost/google-find-hub-traccar" \
+      org.opencontainers.image.documentation="https://github.com/FoxLost/google-find-hub-traccar#readme" \
       org.opencontainers.image.licenses="GPL-3.0-only"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

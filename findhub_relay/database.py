@@ -175,6 +175,12 @@ class Database:
                 (limit,),
             )]
 
+    def pending_position_count(self) -> int:
+        with self.connect() as db:
+            return db.execute(
+                "SELECT COUNT(*) FROM outbound_positions WHERE sent_at IS NULL"
+            ).fetchone()[0]
+
     def mark_sent(self, position_id: int) -> None:
         with self.connect() as db, db:
             db.execute(

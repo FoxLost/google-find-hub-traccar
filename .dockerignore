@@ -17,6 +17,10 @@ env/
 .ruff_cache/
 .nox/
 .hypothesis/
+browser-profile/
+browser-profiles/
+chrome-profile/
+chrome-profiles/
 .eggs/
 build/
 dist/
@@ -48,6 +52,13 @@ credentials.json
 **/*-credentials.json
 relay.db
 **/relay.db
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 data/
 **/data/
 relay-data/

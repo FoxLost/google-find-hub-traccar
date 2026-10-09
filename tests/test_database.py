@@ -22,12 +22,14 @@ class DatabaseBehaviorTests(unittest.TestCase):
             ]
             self.assertEqual(first.enqueue_positions("device", reports), 2)
             self.assertEqual(first.enqueue_positions("device", reports), 0)
+            self.assertEqual(first.pending_position_count(), 2)
 
             restarted = Database(path)
             restarted.initialize()
             pending = restarted.pending_positions()
             self.assertEqual([row["timestamp"] for row in pending], [10, 20])
             restarted.mark_sent(pending[0]["id"])
+            self.assertEqual(restarted.pending_position_count(), 1)
             self.assertEqual(
                 [row["timestamp"] for row in restarted.pending_positions()], [20]
             )

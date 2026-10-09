@@ -141,9 +141,106 @@ Relay membutuhkan outbound TCP `443` untuk endpoint HTTPS Google, termasuk
 FCM/Firebase. Listener FCM/MCS memakai `mtalk.google.com:5228`; izinkan outbound
 TCP `5228` ke host tersebut. Relay tidak membutuhkan inbound port.
 
+## Menjalankan image Docker Hub
+
+Jalur ini memakai image `herlambang333/google-find-hub-traccar`; tag yang
+direkomendasikan adalah `latest` dan `1.0.1`. Image saat ini hanya mendukung
+`linux/amd64`. Credential tetap harus diprovision di host dan distage sebelum
+container dibuat (langkah `install` di atas).
+
+Buat dedicated network jika belum ada, lalu hubungkan container Traccar:
+
+```bash
+docker network inspect tracking >/dev/null 2>&1 || docker network create tracking
+docker network connect tracking traccar
+```
+
+Perintah `docker network connect` hanya perlu dijalankan jika container Traccar
+belum terhubung ke network tersebut. Pull dan jalankan daemon dengan hardening
+yang sama seperti Compose:
+
+```bash
+docker pull herlambang333/google-find-hub-traccar:latest
+docker run -d --name google-find-hub-traccar \
+  --restart unless-stopped --init --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges --stop-timeout 45 \
+  -v "$PWD/relay-data:/data" --network tracking \
+  -e TRACCAR_URL=http://traccar:5055 \
+  -e DATA_DIRECTORY=/data -e CREDENTIALS_FILE=/data/credentials.json \
+  herlambang333/google-find-hub-traccar:latest
+```
+
+Untuk Traccar native di Windows, gunakan host gateway dan endpoint berikut
+(Traccar harus listen pada alamat non-loopback dan firewall mengizinkan TCP
+`5055`):
+
+```bash
+docker run -d --name google-find-hub-traccar \
+  --restart unless-stopped --init --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges --stop-timeout 45 \
+  --add-host host.docker.internal:host-gateway \
+  -v "$PWD/relay-data:/data" --network tracking \
+  -e TRACCAR_URL=http://host.docker.internal:5055 \
+  -e DATA_DIRECTORY=/data -e CREDENTIALS_FILE=/data/credentials.json \
+  herlambang333/google-find-hub-traccar:latest
+```
+
+Setelah daemon berjalan detached, buka terminal container dengan:
+
+```bash
+docker exec -it google-find-hub-traccar sh
+```
+
+Jangan menjalankan `devices` atau `once` dengan `exec` ketika daemon utama
+aktif. Untuk one-off yang aman, hentikan container utama, gunakan mount,
+network, dan environment yang sama, lalu hidupkan kembali container utama:
+
+```bash
+docker stop google-find-hub-traccar
+docker run --rm --init --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges --stop-timeout 45 \
+  -v "$PWD/relay-data:/data" --network tracking \
+  -e TRACCAR_URL=http://traccar:5055 \
+  -e DATA_DIRECTORY=/data -e CREDENTIALS_FILE=/data/credentials.json \
+  herlambang333/google-find-hub-traccar:latest devices
+docker run --rm --init --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges --stop-timeout 45 \
+  -v "$PWD/relay-data:/data" --network tracking \
+  -e TRACCAR_URL=http://traccar:5055 \
+  -e DATA_DIRECTORY=/data -e CREDENTIALS_FILE=/data/credentials.json \
+  herlambang333/google-find-hub-traccar:latest once
+docker start google-find-hub-traccar
+```
+
+Ganti URL dan tambahkan `--add-host` seperti contoh Windows jika Traccar native.
+
+Terminal, CLI, log, dan lifecycle container:
+
+```bash
+docker exec -it google-find-hub-traccar sh
+findhub-relay --help
+findhub-relay healthcheck
+exit
+docker logs --tail=100 google-find-hub-traccar
+docker inspect google-find-hub-traccar
+docker stop google-find-hub-traccar
+docker rm google-find-hub-traccar
+docker pull herlambang333/google-find-hub-traccar:latest
+# Jalankan kembali command daemon di atas setelah update.
+```
+
+Mount `/data` mempertahankan database dan credential saat container dibuat ulang.
+Image tidak mempublikasikan port; root filesystem read-only, semua capability
+dijatuhkan, dan `no-new-privileges` aktif.
+
 ## Build dan jalankan daemon
 
-Setelah credential distage dan network tersedia:
+Untuk deployment dari source dengan Compose, setelah credential distage dan
+network tersedia:
 
 ```bash
 docker compose -f compose.yaml build
@@ -224,6 +321,68 @@ docker compose -f compose.yaml logs --tail=100 relay
 Docker healthcheck menjalankan command yang sama dengan start period dua menit.
 Status stale/unhealthy berarti daemon belum mencatat siklus yang cukup baru,
 atau state, credential, dan konektivitas upstream perlu diperiksa.
+
+### Log, health, dan privasi
+
+Gunakan log container bersama hasil `healthcheck`; koneksi ulang FCM hanya
+menjelaskan lifecycle koneksi Google dan **bukan** bukti bahwa Traccar menerima
+posisi. Perintah ringkas untuk Compose:
+
+```bash
+docker compose -f compose.yaml logs --tail=100 relay
+docker compose -f compose.yaml exec relay findhub-relay healthcheck
+```
+
+Untuk container yang dijalankan langsung dengan `docker run`:
+
+```bash
+docker logs --tail=100 google-find-hub-traccar
+docker exec google-find-hub-traccar findhub-relay healthcheck
+```
+
+Pesan operasional berikut stabil pada prefix dan nama field:
+
+| Level | Prefix/template persis | Field dan arti |
+| --- | --- | --- |
+| INFO | `Relay daemon started poll_interval_seconds=<seconds> device_filter=all` | Daemon mulai untuk semua perangkat; interval polling dicatat tanpa daftar ID. |
+| INFO | `Relay daemon started poll_interval_seconds=<seconds> device_filter_count=<count>` | Daemon mulai dengan filter; hanya jumlah ID yang dicatat. |
+| INFO | `Relay cycle started` | Siklus baru dimulai. |
+| INFO | `Find Hub query succeeded device_id=<id> reports=<count>` | Query satu perangkat berhasil; hanya jumlah laporan yang dicatat. |
+| ERROR | `Find Hub query failed device_id=<id> error_type=<class>` | Query perangkat gagal; tipe exception dicatat tanpa teks exception. |
+| INFO | `OsmAnd delivery accepted device_id=<id> position_timestamp=<timestamp> http_status=<2xx>` | Traccar menerima satu posisi antrean dengan respons 2xx. |
+| WARNING | `OsmAnd delivery HTTP failure device_id=<id> position_timestamp=<timestamp> http_status=<status>` | Traccar mengembalikan status non-2xx. |
+| WARNING | `OsmAnd delivery transport failure device_id=<id> position_timestamp=<timestamp> error_type=<class>` | Request gagal sebelum memperoleh status HTTP. |
+| ERROR | `Relay cycle failed error_type=<class>` | Siklus gagal secara keseluruhan; daemon akan mencoba siklus berikutnya. |
+| INFO | `Relay cycle completed status=<status> devices_selected=<count> devices_queried=<count> positions_queued=<count> positions_sent=<count> delivery_failures=<count> pending_positions=<count> duration_seconds=<seconds>` | Ringkasan tunggal hasil siklus dan sisa antrean. |
+| INFO | `Relay daemon waiting next_cycle_seconds=<seconds>` | Daemon menunggu jadwal siklus berikutnya; ini bukan heartbeat. |
+| INFO | `Relay daemon stopped gracefully` | Daemon berhenti dengan normal. |
+| WARNING | `Relay cycle pending count failed error_type=<class>` | Penghitungan diagnostik antrean gagal; ringkasan memakai `pending_positions=-1` tanpa mengubah hasil siklus. |
+
+Signal normal utama adalah `Relay cycle completed status=ok`. Nilai
+`status=degraded` berarti siklus selesai tetapi satu atau lebih query/pengiriman
+gagal; `status=failed` berarti siklus tidak dapat diselesaikan. Periksa
+`delivery_failures` dan `pending_positions` untuk membedakan kegagalan kirim
+dari backlog. Hanya HTTP 2xx yang menandai posisi sebagai terkirim. Request
+error, HTTP 429, atau HTTP 5xx menghentikan batch saat itu; HTTP 4xx biasa
+tidak menghentikan posisi berikutnya. Semua baris yang masih pending tetap
+durable di SQLite dan dicoba lagi pada siklus berikutnya.
+
+`healthcheck` mencetak JSON state yang mencakup `daemon_status`,
+`cycle_status`, `pending_positions`, `stale`, `healthy`, waktu lifecycle, dan
+`last_error`. Exit `0` berarti daemon `running`, siklus terakhir `ok`, schema
+sesuai, dan state belum stale. Exit `1` berarti state tidak sehat, termasuk
+`degraded`, `failed`, daemon berhenti, atau siklus stale; exit `2` berarti
+error konfigurasi/fatal saat command dijalankan. Docker menjalankan command
+yang sama setiap 30 detik, dengan start period dua menit, timeout 10 detik, dan
+3 percobaan.
+
+Pesan operasional relay pada tabel ini dapat memuat `device_id` yang
+dikonfigurasi, jumlah, timing, status, dan kelas error, tetapi tidak pernah
+memuat koordinat atau payload lokasi, body respons, URL endpoint, credential,
+token, atau payload FCM. Field health `last_error` menyimpan konteks aman berupa
+perangkat/kelas error atau jumlah kegagalan delivery, bukan teks exception
+mentah.
+
 
 ## Backup
 
